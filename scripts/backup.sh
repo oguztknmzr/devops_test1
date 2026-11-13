@@ -1,5 +1,5 @@
 #!/bin/bash
-# Backup script: database dump + API logs, keeps the last 7 days
+# Backup script: database dump + API logs, keeps the last 7 days, copies to S3 
 set -e
 set -o pipefail
 
@@ -23,4 +23,9 @@ docker compose logs --no-color api | gzip > "$BACKUP_DIR/api_logs_$DATE.log.gz"
 # 3. Delete backups older than KEEP_DAYS
 find "$BACKUP_DIR" -type f -name "*.gz" -mtime +$KEEP_DAYS -delete
 
+# 4. Off-site copy: upload backups to S3
+#    (the bucket lifecycle rule deletes them after 30 days)
+S3_BUCKET="devops-test1-backups-oguz"
+/snap/bin/aws s3 sync "$BACKUP_DIR" "s3://$S3_BUCKET/backups/" \
+    --exclude "*" --include "*.gz" --region eu-north-1 --only-show-errors
 echo "$(date): Backup done -> $BACKUP_DIR"
